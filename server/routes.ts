@@ -8,9 +8,6 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { logToMake } from "./makeLogger";
 import { fetchBookInfo } from "./utils/fetchBookInfo";
-import { fetchGameInfo } from "./utils/fetchGameInfo";
-import { fetchAppInfo } from "./utils/fetchAppInfo";
-import { fetchIOSAppInfo } from "./utils/fetchIOSAppInfo";
 import { searchiTunes } from "./utils/fetchMusicInfo";
 import { neon } from "@neondatabase/serverless";
 import { LyricsCache } from "./lyrics/index";
@@ -52,14 +49,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { artist, title, rawLyrics } = validation.data;
 
-      // Initialize cache
-      const sql = neon(process.env.DATABASE_URL!);
-      const cache = new LyricsCache(sql, 90);
+      // Initialize cache only if DATABASE_URL is set
+      let cache: LyricsCache | null = null;
+      if (process.env.DATABASE_URL) {
+        const sql = neon(process.env.DATABASE_URL);
+        cache = new LyricsCache(sql, 90);
+      }
 
-      // Check cache first
-      let lyrics = await cache.get(artist, title);
+      // Check cache first (if available)
+      let lyrics: string | null = null;
       let provider = 'cache';
-      let lyricsAvailable = !!lyrics;
+      let lyricsAvailable = false;
+
+      if (cache) {
+        lyrics = await cache.get(artist, title);
+        lyricsAvailable = !!lyrics;
+      }
 
       if (!lyrics) {
         // Try manual lyrics if provided
@@ -67,18 +72,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lyrics = rawLyrics;
           provider = 'manual';
           lyricsAvailable = true;
-          await cache.set(artist, title, lyrics, provider);
-        } 
+          if (cache) {
+            await cache.set(artist, title, lyrics, provider);
+          }
+        }
         // Try Musixmatch if API key is configured
         else if (process.env.LYRICS_API_KEY && process.env.LYRICS_PROVIDER === 'musixmatch') {
           const musixmatch = new MusixmatchProvider(process.env.LYRICS_API_KEY);
           const result = await musixmatch.search(artist, title);
-          
+
           if (result) {
             lyrics = result.lyrics;
             provider = result.provider;
             lyricsAvailable = true;
-            await cache.set(artist, title, lyrics, provider);
+            if (cache) {
+              await cache.set(artist, title, lyrics, provider);
+            }
           }
         }
       }
@@ -169,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const schema = z.object({
         query: z.string().min(1),
-        mediaType: z.enum(["movie", "show", "game", "song"]).optional(),
+        mediaType: z.enum(["movie", "show", "book", "song"]).optional(),
       });
 
       const validation = schema.safeParse(req.query);
@@ -256,7 +265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`✅ Found book info: ${bookInfo.title} by ${bookInfo.authors}`);
           finalPosterUrl = bookInfo.imageUrl || finalPosterUrl;
           finalGenre = bookInfo.genre || null;
-          
+
           // Build rich description from Google Books data
           const bookContext = [
             bookInfo.description,
@@ -264,9 +273,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             bookInfo.genre ? `Genre: ${bookInfo.genre}` : null,
             bookInfo.publishedDate ? `Published: ${bookInfo.publishedDate}` : null,
           ].filter(Boolean).join('\n\n');
-          
+
           finalDescription = bookContext || finalDescription;
-          
+
           // Extract year from publishedDate if available
           if (bookInfo.publishedDate && !finalReleaseYear) {
             const yearMatch = bookInfo.publishedDate.match(/\d{4}/);
@@ -274,72 +283,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else {
           console.log(`⚠️ No Google Books data found for "${title}"`);
-        }
-      }
-      
-      // For games, fetch RAWG metadata (if API key configured)
-      if (mediaType === "game") {
-        console.log(`🎮 Fetching RAWG game data for "${title}"...`);
-        const gameInfo = await fetchGameInfo(title);
-        if (gameInfo) {
-          console.log(`✅ Found game info: ${gameInfo.title} (${gameInfo.genre || 'Unknown'})`);
-          finalPosterUrl = gameInfo.imageUrl || finalPosterUrl;
-          finalGenre = gameInfo.genre || finalGenre;
-          
-          // Build rich description from RAWG data (only if we have description)
-          if (gameInfo.description) {
-            const gameContext = [
-              gameInfo.description,
-              gameInfo.genre ? `Genre: ${gameInfo.genre}` : null,
-              gameInfo.rating ? `Rating: ${gameInfo.rating}/5` : null,
-              gameInfo.releaseDate ? `Released: ${gameInfo.releaseDate}` : null,
-            ].filter(Boolean).join('\n\n');
-            
-            // Only override if we have substantive content
-            if (gameContext.trim()) {
-              finalDescription = gameContext;
-            }
-          }
-          
-          // Extract year from releaseDate if available
-          if (gameInfo.releaseDate && !finalReleaseYear) {
-            const yearMatch = gameInfo.releaseDate.match(/\d{4}/);
-            finalReleaseYear = yearMatch ? yearMatch[0] : null;
-          }
-        } else {
-          console.log(`⚠️ No RAWG game data found for "${title}"`);
-        }
-      }
-      
-      // For apps, fetch Google Play Store metadata with iOS fallback
-      if (mediaType === "app") {
-        console.log(`📱 Fetching Google Play Store data for "${title}"...`);
-        let appInfo = await fetchAppInfo(title);
-        
-        // Fallback to iOS App Store if Android not found
-        if (!appInfo) {
-          console.log(`🍎 Trying iOS App Store as fallback for "${title}"...`);
-          appInfo = await fetchIOSAppInfo(title);
-        }
-        
-        if (appInfo) {
-          const source = (appInfo as any).source || 'Google Play Store';
-          console.log(`✅ Found app info: ${appInfo.title} by ${appInfo.developer} (${source})`);
-          finalPosterUrl = (appInfo as any).icon || finalPosterUrl;
-          finalGenre = appInfo.genre || finalGenre;
-          
-          // Build rich description from app data
-          const appContext = [
-            appInfo.description,
-            appInfo.developer ? `Developer: ${appInfo.developer}` : null,
-            appInfo.genre ? `Genre: ${appInfo.genre}` : null,
-            appInfo.score ? `Rating: ${appInfo.score}/5` : null,
-            (appInfo as any).installs ? `Installs: ${(appInfo as any).installs}` : null,
-          ].filter(Boolean).join('\n\n');
-          
-          finalDescription = appContext || finalDescription;
-        } else {
-          console.log(`⚠️ No app data found for "${title}" on Google Play or App Store`);
         }
       }
       

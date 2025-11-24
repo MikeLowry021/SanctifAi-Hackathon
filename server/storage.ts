@@ -431,8 +431,13 @@ export class DbStorage implements IStorage {
   }
 }
 
-// Use PostgreSQL database for persistent storage
+// Use PostgreSQL database for persistent storage, or in-memory if DATABASE_URL not set
 async function createStorage(): Promise<IStorage> {
+  if (!process.env.DATABASE_URL) {
+    console.log("⚠️  DATABASE_URL not set - using in-memory storage");
+    return new MemStorage();
+  }
+
   try {
     // Test database connection
     await db.select().from(mediaAnalyses).limit(1);

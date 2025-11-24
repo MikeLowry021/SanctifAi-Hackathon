@@ -3,12 +3,12 @@ import { neon } from "@neondatabase/serverless";
 import * as schema from "@shared/schema";
 import { createLyricsCacheTable } from "./lyrics/index";
 
-// Lazy database connection - only throws when actually used
+// Lazy database connection - returns null if DATABASE_URL not set
 export function getDb() {
   if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL environment variable is not set");
+    return null;
   }
-  
+
   const sql = neon(process.env.DATABASE_URL);
   return drizzle(sql, { schema });
 }
@@ -20,15 +20,24 @@ export const db = new Proxy({} as ReturnType<typeof getDb>, {
     if (!_db) {
       _db = getDb();
     }
+    if (!_db) {
+      throw new Error("DATABASE_URL not configured - database operations unavailable");
+    }
     return (_db as any)[prop];
   }
 });
 
-// Initialize lyrics cache table on startup
+// Initialize lyrics cache table on startup (only if DATABASE_URL is set)
 export async function initializeLyricsCache() {
+  if (!process.env.DATABASE_URL) {
+    console.log("⚠️  DATABASE_URL not set - lyrics cache will be disabled");
+    return;
+  }
+
   try {
-    const sql = neon(process.env.DATABASE_URL!);
+    const sql = neon(process.env.DATABASE_URL);
     await createLyricsCacheTable(sql);
+    console.log("✅ Lyrics cache table initialized");
   } catch (error) {
     console.error('Failed to initialize lyrics cache:', error);
   }

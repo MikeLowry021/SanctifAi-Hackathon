@@ -7,7 +7,7 @@ import { z } from "zod";
 export const mediaAnalyses = pgTable("media_analyses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
-  mediaType: text("media_type").notNull(), // movie, show, game, app, book
+  mediaType: text("media_type").notNull(), // movie, show, book, song
   tmdbId: integer("tmdb_id"), // TMDB ID for precise cache matching
   imdbRating: text("imdb_rating"),
   genre: text("genre"),
@@ -47,7 +47,7 @@ export type VerseReflection = {
 // Search request schema
 export const searchRequestSchema = z.object({
   title: z.string().min(1, "Please enter a media title"),
-  mediaType: z.enum(["movie", "show", "game", "app", "book"]).optional(),
+  mediaType: z.enum(["movie", "show", "book", "song"]).optional(),
   tmdbId: z.number().optional(),
   posterUrl: z.string().optional(),
   releaseYear: z.string().optional(),
@@ -64,7 +64,7 @@ export type TMDBResult = {
   releaseYear: string | null;
   overview: string;
   rating: number;
-  mediaType: "movie" | "show" | "game";
+  mediaType: "movie" | "show" | "book" | "song";
 };
 
 // API response types
