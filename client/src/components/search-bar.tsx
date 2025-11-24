@@ -52,9 +52,7 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="movie">Movie</SelectItem>
             <SelectItem value="show">TV Show</SelectItem>
-            <SelectItem value="game">Game</SelectItem>
             <SelectItem value="song">Song</SelectItem>
-            <SelectItem value="app">App</SelectItem>
             <SelectItem value="book">Book</SelectItem>
           </SelectContent>
         </Select>
