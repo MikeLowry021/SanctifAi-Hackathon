@@ -7,7 +7,7 @@ import { z } from "zod";
 export const mediaAnalyses = pgTable("media_analyses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
-  mediaType: z.enum(["movie", "show", "book"]).optional(),
+  mediaType: text("media_type").notNull(), // movie, show, book, song
   tmdbId: integer("tmdb_id"), // TMDB ID for precise cache matching
   imdbRating: text("imdb_rating"),
   genre: text("genre"),

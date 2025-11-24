@@ -130,8 +130,7 @@ export function Header() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button 
-                <Button 
+                <Button
                   variant="outline" size="sm" disabled>
                   Guest Mode
                 </Button>

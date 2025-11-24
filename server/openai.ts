@@ -1,7 +1,17 @@
 import OpenAI from "openai";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Lazy initialization of OpenAI client
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
+}
 
 export interface DiscernmentAnalysis {
   discernmentScore: number;
@@ -95,7 +105,7 @@ Respond ONLY with valid JSON in this exact format:
       timeoutHandle = setTimeout(() => reject(new Error("OpenAI request timeout after 45 seconds")), 45000);
     });
 
-    const apiPromise = openai.chat.completions.create({
+    const apiPromise = getOpenAIClient().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
