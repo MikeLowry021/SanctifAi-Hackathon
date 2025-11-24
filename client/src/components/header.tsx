@@ -131,13 +131,9 @@ export function Header() {
                 </DropdownMenu>
               ) : (
                 <Button 
-                  variant="default" 
-                  size="sm" 
-                  onClick={handleLogin} 
-                  data-testid="button-login"
-                >
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Log In
+                <Button 
+                  variant="outline" size="sm" disabled>
+                  Guest Mode
                 </Button>
               )}
             </>
