@@ -1,0 +1,579 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage, toSearchResponse } from "./storage";
+import { analyzeMedia } from "./openai";
+import { searchRequestSchema, type InsertMediaAnalysis } from "@shared/schema";
+import { searchTMDB, getTMDBDetails } from "./tmdb";
+import { z } from "zod";
+import { setupAuth, isAuthenticated } from "./replitAuth";
+import { logToMake } from "./makeLogger";
+import { fetchBookInfo } from "./utils/fetchBookInfo";
+import { fetchGameInfo } from "./utils/fetchGameInfo";
+import { fetchAppInfo } from "./utils/fetchAppInfo";
+import { fetchIOSAppInfo } from "./utils/fetchIOSAppInfo";
+import { searchiTunes } from "./utils/fetchMusicInfo";
+import { neon } from "@neondatabase/serverless";
+import { LyricsCache } from "./lyrics/index";
+import { MusixmatchProvider } from "./lyrics/musixmatch";
+import { ManualProvider } from "./lyrics/manual";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup authentication (Replit Auth integration)
+  await setupAuth(app);
+
+  // Auth route - get current user
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Lyrics analysis endpoint
+  app.post("/api/analyze/lyrics", async (req, res) => {
+    try {
+      const schema = z.object({
+        artist: z.string().min(1),
+        title: z.string().min(1),
+        rawLyrics: z.string().optional(),
+      });
+
+      const validation = schema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          details: validation.error.errors,
+        });
+      }
+
+      const { artist, title, rawLyrics } = validation.data;
+
+      // Initialize cache
+      const sql = neon(process.env.DATABASE_URL!);
+      const cache = new LyricsCache(sql, 90);
+
+      // Check cache first
+      let lyrics = await cache.get(artist, title);
+      let provider = 'cache';
+      let lyricsAvailable = !!lyrics;
+
+      if (!lyrics) {
+        // Try manual lyrics if provided
+        if (rawLyrics) {
+          lyrics = rawLyrics;
+          provider = 'manual';
+          lyricsAvailable = true;
+          await cache.set(artist, title, lyrics, provider);
+        } 
+        // Try Musixmatch if API key is configured
+        else if (process.env.LYRICS_API_KEY && process.env.LYRICS_PROVIDER === 'musixmatch') {
+          const musixmatch = new MusixmatchProvider(process.env.LYRICS_API_KEY);
+          const result = await musixmatch.search(artist, title);
+          
+          if (result) {
+            lyrics = result.lyrics;
+            provider = result.provider;
+            lyricsAvailable = true;
+            await cache.set(artist, title, lyrics, provider);
+          }
+        }
+      }
+
+      // If no lyrics available, return early
+      if (!lyrics || !lyricsAvailable) {
+        return res.json({
+          meta: { title, artist },
+          lyricsAvailable: false,
+          message: "Lyrics not available. You can paste lyrics manually for analysis.",
+        });
+      }
+
+      // Load scripture analysis libs dynamically
+      const { extractSignals } = await import("../client/src/lib/extract.js");
+      const { scoreFromSignals } = await import("../client/src/lib/score.js");
+      const { getVerses } = await import("../client/src/lib/scripture.js");
+      
+      // Load rules from YAML
+      const { readFileSync } = await import("fs");
+      const { parse: parseYaml } = await import("yaml");
+      const rulesYaml = readFileSync("client/src/lib/rules.yaml", "utf8");
+      const rules = parseYaml(rulesYaml);
+
+      // Extract signals from lyrics
+      const signals = extractSignals(lyrics);
+
+      // Score based on signals and rules
+      const score = scoreFromSignals(signals, rules);
+
+      // Fetch Bible verses for all unique anchors
+      const uniqueRefs = new Set<string>();
+      score.hits.forEach((hit: any) => {
+        hit.refs.forEach((ref: string) => uniqueRefs.add(ref));
+      });
+
+      const verses = await getVerses(Array.from(uniqueRefs), "WEB");
+
+      res.json({
+        meta: {
+          title,
+          artist,
+        },
+        lyricsAvailable: true,
+        provider,
+        cached: provider === 'cache',
+        analysis: {
+          signals,
+          score,
+          verses,
+        },
+      });
+    } catch (error) {
+      console.error("Lyrics analysis error:", error);
+      res.status(500).json({
+        error: "Failed to analyze lyrics",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // iTunes Music search endpoint
+  app.get("/api/music/search", async (req, res) => {
+    try {
+      const { term, limit } = req.query;
+      if (!term || typeof term !== 'string') {
+        return res.status(400).json({ message: "Search term required" });
+      }
+
+      const { searchiTunes } = await import("./utils/fetchMusicInfo");
+      const results = await searchiTunes(term);
+      
+      // iTunes API returns its own format, just pass through
+      const iTunesResponse = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${limit || 10}`
+      );
+      const data = await iTunesResponse.json();
+      
+      return res.json(data);
+    } catch (error: any) {
+      console.error("iTunes search error:", error);
+      return res.status(500).json({ message: "iTunes search failed", error: error.message });
+    }
+  });
+
+  // TMDB search endpoint - get media options with posters
+  app.get("/api/tmdb/search", async (req, res) => {
+    try {
+      const schema = z.object({
+        query: z.string().min(1),
+        mediaType: z.enum(["movie", "show", "game", "song"]).optional(),
+      });
+
+      const validation = schema.safeParse(req.query);
+      if (!validation.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          details: validation.error.errors,
+        });
+      }
+
+      const { query, mediaType = "movie" } = validation.data;
+      
+      // Handle iTunes music search separately
+      if (mediaType === "song") {
+        const results = await searchiTunes(query);
+        return res.json({ results });
+      }
+      
+      const results = await searchTMDB(query, mediaType);
+
+      res.json({ results });
+    } catch (error) {
+      console.error("TMDB search error:", error);
+      res.status(500).json({
+        error: "Failed to search TMDB",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Search endpoint - analyze media with AI
+  app.post("/api/search", async (req, res) => {
+    try {
+      const validation = searchRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          details: validation.error.errors,
+        });
+      }
+
+      const { title, mediaType = "movie", tmdbId, posterUrl, releaseYear, overview } = validation.data;
+
+      // Smart caching: Check cache by TMDB ID first (most specific), then by title
+      let cached: any = null;
+      if (tmdbId) {
+        // If we have TMDB ID, check for exact match (same movie/show)
+        cached = await storage.getAnalysisByTmdbId(tmdbId, mediaType);
+      }
+      if (!cached) {
+        // Fallback to title-based lookup for non-TMDB searches
+        cached = await storage.getAnalysisByTitle(title);
+      }
+      
+      if (cached) {
+        console.log(`✅ Returning cached analysis for "${title}" (tmdbId: ${tmdbId || 'none'})`);
+        
+        // Auto-save cached analysis to user's library if authenticated
+        if ((req as any).user?.claims?.sub) {
+          try {
+            const userId = (req as any).user.claims.sub;
+            await storage.saveAnalysis(userId, cached.id);
+            console.log(`✅ Auto-saved cached analysis "${cached.title}" to user ${userId}'s library`);
+          } catch (saveError) {
+            console.error("Failed to auto-save cached analysis to library:", saveError);
+            // Don't fail the request if auto-save fails
+          }
+        }
+        
+        return res.json(toSearchResponse(cached));
+      }
+
+      // Use TMDB data if provided, otherwise fetch IMDB data (placeholder)
+      let finalPosterUrl = posterUrl || null;
+      let finalDescription = overview || null;
+      let finalReleaseYear = releaseYear || null;
+      let finalGenre: string | null = null;
+      
+      // For books, fetch Google Books metadata
+      if (mediaType === "book") {
+        console.log(`📚 Fetching Google Books data for "${title}"...`);
+        const bookInfo = await fetchBookInfo(title);
+        if (bookInfo) {
+          console.log(`✅ Found book info: ${bookInfo.title} by ${bookInfo.authors}`);
+          finalPosterUrl = bookInfo.imageUrl || finalPosterUrl;
+          finalGenre = bookInfo.genre || null;
+          
+          // Build rich description from Google Books data
+          const bookContext = [
+            bookInfo.description,
+            bookInfo.authors ? `Author(s): ${bookInfo.authors}` : null,
+            bookInfo.genre ? `Genre: ${bookInfo.genre}` : null,
+            bookInfo.publishedDate ? `Published: ${bookInfo.publishedDate}` : null,
+          ].filter(Boolean).join('\n\n');
+          
+          finalDescription = bookContext || finalDescription;
+          
+          // Extract year from publishedDate if available
+          if (bookInfo.publishedDate && !finalReleaseYear) {
+            const yearMatch = bookInfo.publishedDate.match(/\d{4}/);
+            finalReleaseYear = yearMatch ? yearMatch[0] : null;
+          }
+        } else {
+          console.log(`⚠️ No Google Books data found for "${title}"`);
+        }
+      }
+      
+      // For games, fetch RAWG metadata (if API key configured)
+      if (mediaType === "game") {
+        console.log(`🎮 Fetching RAWG game data for "${title}"...`);
+        const gameInfo = await fetchGameInfo(title);
+        if (gameInfo) {
+          console.log(`✅ Found game info: ${gameInfo.title} (${gameInfo.genre || 'Unknown'})`);
+          finalPosterUrl = gameInfo.imageUrl || finalPosterUrl;
+          finalGenre = gameInfo.genre || finalGenre;
+          
+          // Build rich description from RAWG data (only if we have description)
+          if (gameInfo.description) {
+            const gameContext = [
+              gameInfo.description,
+              gameInfo.genre ? `Genre: ${gameInfo.genre}` : null,
+              gameInfo.rating ? `Rating: ${gameInfo.rating}/5` : null,
+              gameInfo.releaseDate ? `Released: ${gameInfo.releaseDate}` : null,
+            ].filter(Boolean).join('\n\n');
+            
+            // Only override if we have substantive content
+            if (gameContext.trim()) {
+              finalDescription = gameContext;
+            }
+          }
+          
+          // Extract year from releaseDate if available
+          if (gameInfo.releaseDate && !finalReleaseYear) {
+            const yearMatch = gameInfo.releaseDate.match(/\d{4}/);
+            finalReleaseYear = yearMatch ? yearMatch[0] : null;
+          }
+        } else {
+          console.log(`⚠️ No RAWG game data found for "${title}"`);
+        }
+      }
+      
+      // For apps, fetch Google Play Store metadata with iOS fallback
+      if (mediaType === "app") {
+        console.log(`📱 Fetching Google Play Store data for "${title}"...`);
+        let appInfo = await fetchAppInfo(title);
+        
+        // Fallback to iOS App Store if Android not found
+        if (!appInfo) {
+          console.log(`🍎 Trying iOS App Store as fallback for "${title}"...`);
+          appInfo = await fetchIOSAppInfo(title);
+        }
+        
+        if (appInfo) {
+          const source = (appInfo as any).source || 'Google Play Store';
+          console.log(`✅ Found app info: ${appInfo.title} by ${appInfo.developer} (${source})`);
+          finalPosterUrl = (appInfo as any).icon || finalPosterUrl;
+          finalGenre = appInfo.genre || finalGenre;
+          
+          // Build rich description from app data
+          const appContext = [
+            appInfo.description,
+            appInfo.developer ? `Developer: ${appInfo.developer}` : null,
+            appInfo.genre ? `Genre: ${appInfo.genre}` : null,
+            appInfo.score ? `Rating: ${appInfo.score}/5` : null,
+            (appInfo as any).installs ? `Installs: ${(appInfo as any).installs}` : null,
+          ].filter(Boolean).join('\n\n');
+          
+          finalDescription = appContext || finalDescription;
+        } else {
+          console.log(`⚠️ No app data found for "${title}" on Google Play or App Store`);
+        }
+      }
+      
+      if (tmdbId && !posterUrl && !overview) {
+        // Fetch TMDB details if we have ID but no poster/overview
+        const tmdbDetails = await getTMDBDetails(tmdbId, mediaType === "show" ? "show" : "movie");
+        if (tmdbDetails) {
+          finalPosterUrl = tmdbDetails.posterUrl;
+          finalDescription = tmdbDetails.overview;
+        }
+      }
+
+      // Analyze with OpenAI - pass enriched metadata for accurate identification
+      const analysis = await analyzeMedia(title, mediaType, finalReleaseYear, finalDescription);
+
+      // Store the result with TMDB ID for caching
+      const insertData: InsertMediaAnalysis = {
+        title,
+        mediaType,
+        tmdbId: tmdbId || null,
+        imdbRating: null,
+        genre: finalGenre,
+        description: finalDescription,
+        posterUrl: finalPosterUrl,
+        trailerUrl: null,
+        discernmentScore: analysis.discernmentScore,
+        faithAnalysis: analysis.faithAnalysis,
+        tags: analysis.tags,
+        verseText: analysis.verseText,
+        verseReference: analysis.verseReference,
+        alternatives: JSON.stringify(analysis.alternatives),
+      };
+
+      const saved = await storage.createAnalysis(insertData);
+
+      // Auto-save to user's library if authenticated
+      if ((req as any).user?.claims?.sub) {
+        try {
+          const userId = (req as any).user.claims.sub;
+          await storage.saveAnalysis(userId, saved.id);
+          console.log(`✅ Auto-saved analysis "${saved.title}" to user ${userId}'s library`);
+        } catch (saveError) {
+          console.error("Failed to auto-save analysis to library:", saveError);
+          // Don't fail the request if auto-save fails
+        }
+      }
+
+      // Log search to Firestore (if storage supports it)
+      if (storage.logSearch) {
+        try {
+          await storage.logSearch({
+            title: saved.title,
+            mediaType: saved.mediaType,
+            discernmentScore: saved.discernmentScore,
+            timestamp: new Date(),
+          });
+        } catch (logError) {
+          console.error("Failed to log search to Firestore:", logError);
+          // Don't fail the request if logging fails
+        }
+      }
+
+      // Log to Make.com webhook (if configured)
+      await logToMake({
+        timestamp: new Date().toISOString(),
+        title: saved.title,
+        mediaType: saved.mediaType,
+        score: saved.discernmentScore,
+        genre: saved.genre,
+        verse: saved.verseReference,
+        summary: saved.faithAnalysis.substring(0, 200),
+      });
+
+      res.json(toSearchResponse(saved));
+    } catch (error) {
+      console.error("Search error:", error);
+      res.status(500).json({
+        error: "Failed to analyze media",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Get analysis by ID
+  app.get("/api/search/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const analysis = await storage.getAnalysis(id);
+
+      if (!analysis) {
+        return res.status(404).json({ error: "Analysis not found" });
+      }
+
+      res.json(toSearchResponse(analysis));
+    } catch (error) {
+      console.error("Get analysis error:", error);
+      res.status(500).json({ error: "Failed to retrieve analysis" });
+    }
+  });
+
+  // Webhook endpoint for Make.com logging
+  app.post("/api/log-search", async (req, res) => {
+    try {
+      // This endpoint receives webhook data from Make.com
+      // For now, just acknowledge receipt
+      console.log("Received Make.com webhook:", req.body);
+      res.json({ success: true, message: "Webhook received" });
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(500).json({ error: "Failed to process webhook" });
+    }
+  });
+
+  // Saved analyses routes (require authentication)
+  app.get("/api/saved-analyses", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const savedAnalyses = await storage.getSavedAnalyses(userId);
+      res.json(savedAnalyses.map(toSearchResponse));
+    } catch (error) {
+      console.error("Get saved analyses error:", error);
+      res.status(500).json({ error: "Failed to retrieve saved analyses" });
+    }
+  });
+
+  app.post("/api/saved-analyses/:analysisId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { analysisId } = req.params;
+      
+      // Check if analysis exists
+      const analysis = await storage.getAnalysis(analysisId);
+      if (!analysis) {
+        return res.status(404).json({ error: "Analysis not found" });
+      }
+
+      // Save the analysis
+      const saved = await storage.saveAnalysis(userId, analysisId);
+      res.json({ success: true, saved });
+    } catch (error) {
+      console.error("Save analysis error:", error);
+      res.status(500).json({ error: "Failed to save analysis" });
+    }
+  });
+
+  app.delete("/api/saved-analyses/:analysisId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { analysisId } = req.params;
+      
+      await storage.unsaveAnalysis(userId, analysisId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Unsave analysis error:", error);
+      res.status(500).json({ error: "Failed to unsave analysis" });
+    }
+  });
+
+  app.get("/api/saved-analyses/check/:analysisId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { analysisId } = req.params;
+      
+      const isSaved = await storage.isAnalysisSaved(userId, analysisId);
+      res.json({ isSaved });
+    } catch (error) {
+      console.error("Check saved analysis error:", error);
+      res.status(500).json({ error: "Failed to check saved status" });
+    }
+  });
+
+  // Community routes (scaffolded - not yet implemented)
+  
+  // Comments routes
+  app.get("/api/comments/:analysisId", async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.post("/api/comments", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.delete("/api/comments/:commentId", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  // Reviews routes
+  app.get("/api/reviews/:analysisId", async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.post("/api/reviews", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.put("/api/reviews/:reviewId", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.delete("/api/reviews/:reviewId", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  // Discussions routes
+  app.get("/api/discussions", async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.get("/api/discussions/:discussionId", async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.post("/api/discussions", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.delete("/api/discussions/:discussionId", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  // Discussion replies routes
+  app.get("/api/discussions/:discussionId/replies", async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.post("/api/discussions/:discussionId/replies", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  app.delete("/api/replies/:replyId", isAuthenticated, async (req, res) => {
+    res.status(501).json({ error: "Community features coming soon" });
+  });
+
+  const httpServer = createServer(app);
+
+  return httpServer;
+}
