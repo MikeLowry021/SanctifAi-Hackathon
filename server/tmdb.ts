@@ -20,7 +20,6 @@ export interface TMDBFormattedResult {
   mediaType: "movie" | "show" | "game";
 }
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
@@ -28,7 +27,8 @@ export async function searchTMDB(
   query: string,
   mediaType: "movie" | "show" | "game" = "movie"
 ): Promise<TMDBFormattedResult[]> {
-  if (!TMDB_API_KEY) {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) {
     throw new Error("TMDB_API_KEY is not configured");
   }
 
@@ -40,7 +40,7 @@ export async function searchTMDB(
     const response = await fetch(url, {
       headers: {
         accept: "application/json",
-        Authorization: `Bearer ${TMDB_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     });
 
@@ -101,7 +101,8 @@ export async function getTMDBDetails(
   tmdbId: number,
   mediaType: "movie" | "show" = "movie"
 ): Promise<TMDBFormattedResult | null> {
-  if (!TMDB_API_KEY) {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) {
     throw new Error("TMDB_API_KEY is not configured");
   }
 
@@ -114,7 +115,7 @@ export async function getTMDBDetails(
     const response = await fetch(endpoint, {
       headers: {
         accept: "application/json",
-        Authorization: `Bearer ${TMDB_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     });
 
