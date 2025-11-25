@@ -1,7 +1,4 @@
-// server/tmdb.ts
-
-import dotenv from "dotenv";
-dotenv.config();
+import { config } from "./config";
 
 export interface TMDBSearchResult {
   id: number;
@@ -32,15 +29,11 @@ const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
  * Helper to get the TMDB key and log its presence.
  */
 function getTMDBApiKey(): string {
-  const apiKey = process.env.TMDB_API_KEY;
+  const apiKey = config.tmdbApiKey;
   console.log("[TMDB] getTMDBApiKey env check:", {
     hasTMDB: !!apiKey,
     preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
   });
-
-  if (!apiKey) {
-    throw new Error("TMDB_API_KEY is not configured on the server");
-  }
 
   return apiKey;
 }

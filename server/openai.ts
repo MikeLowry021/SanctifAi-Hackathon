@@ -1,9 +1,5 @@
-// server/openai.ts
-
-import dotenv from "dotenv";
-dotenv.config();
-
 import OpenAI from "openai";
+import { config } from "./config";
 
 /**
  * The shape of the discernment result returned by the AI.
@@ -77,16 +73,12 @@ In "faithAnalysis":
  * Create an OpenAI client in a safe, lazy way.
  */
 function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = config.openaiApiKey;
 
   console.log("[OpenAI] getOpenAIClient env check:", {
     hasOpenAI: !!apiKey,
     preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
   });
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured on the server");
-  }
 
   return new OpenAI({ apiKey });
 }
