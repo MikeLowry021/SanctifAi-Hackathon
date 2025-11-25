@@ -27,9 +27,10 @@ const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
 /**
  * Helper to get the TMDB key and log its presence.
+ * Returns null when API key is not available.
  */
-function getTMDBApiKey(): string {
-  const apiKey = config.tmdbApiKey;
+function getTMDBApiKey(): string | null {
+  const apiKey = config.tmdbApiKey || process.env.TMDB_API_KEY || null;
   console.log("[TMDB] getTMDBApiKey env check:", {
     hasTMDB: !!apiKey,
     preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
@@ -49,7 +50,7 @@ export async function searchTMDB(
   const apiKey = getTMDBApiKey();
 
   if (!apiKey) {
-    console.error("[TMDB] TMDB_API_KEY is not configured - returning empty results");
+    console.error("[TMDB] No TMDB_API_KEY configured – returning empty results");
     return [];
   }
 
@@ -118,7 +119,7 @@ export async function getTMDBDetails(
   const apiKey = getTMDBApiKey();
 
   if (!apiKey) {
-    console.error("[TMDB] TMDB_API_KEY is not configured - returning null");
+    console.error("[TMDB] No TMDB_API_KEY configured – returning null");
     return null;
   }
 
