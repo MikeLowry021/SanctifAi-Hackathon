@@ -74,7 +74,7 @@ In "faithAnalysis":
  * Returns null if API key is not available.
  */
 function getOpenAIClient(): OpenAI | null {
-  const apiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
+  const apiKey = config.openaiApiKey;
 
   console.log("[OpenAI] getOpenAIClient env check:", {
     hasOpenAI: !!apiKey,
