@@ -48,6 +48,11 @@ export async function searchTMDB(
 ): Promise<TMDBFormattedResult[]> {
   const apiKey = getTMDBApiKey();
 
+  if (!apiKey) {
+    console.error("[TMDB] TMDB_API_KEY is not configured - returning empty results");
+    return [];
+  }
+
   try {
     const endpoint = `${TMDB_BASE_URL}/search/multi`;
     const url = `${endpoint}?query=${encodeURIComponent(query)}`;
@@ -99,7 +104,7 @@ export async function searchTMDB(
     return formatted;
   } catch (error) {
     console.error("[TMDB] Error searching TMDB:", error);
-    throw new Error("Failed to search TMDB");
+    return [];
   }
 }
 
@@ -111,6 +116,11 @@ export async function getTMDBDetails(
   mediaType: "movie" | "show" = "movie"
 ): Promise<TMDBFormattedResult | null> {
   const apiKey = getTMDBApiKey();
+
+  if (!apiKey) {
+    console.error("[TMDB] TMDB_API_KEY is not configured - returning null");
+    return null;
+  }
 
   try {
     const endpoint =

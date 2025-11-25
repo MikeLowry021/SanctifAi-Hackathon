@@ -92,6 +92,21 @@ export async function analyzeMedia(
   releaseYear?: string | null,
   overview?: string | null
 ): Promise<DiscernmentAnalysis> {
+  const apiKey = config.openaiApiKey;
+
+  if (!apiKey) {
+    console.error("[OpenAI] OPENAI_API_KEY is not configured - returning fallback response");
+    return {
+      discernmentScore: 50,
+      faithAnalysis:
+        "The OpenAI API key is not configured on the server. This analysis feature requires proper API credentials to function. Please contact the administrator to enable AI-powered discernment analysis.",
+      tags: ["api-key-missing"],
+      verseText: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.",
+      verseReference: "Proverbs 3:5-6 (NLT)",
+      alternatives: [],
+    };
+  }
+
   const client = getOpenAIClient();
   const prompt = buildPrompt(title, mediaType, releaseYear, overview);
 
