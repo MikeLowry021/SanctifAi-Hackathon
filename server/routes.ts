@@ -293,10 +293,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           finalPosterUrl = tmdbDetails.posterUrl;
           finalDescription = tmdbDetails.overview;
         }
+        // Continue even if TMDB returns null - we'll use what we have
       }
 
       // Analyze with OpenAI - pass enriched metadata for accurate identification
+      // OpenAI will return fallback analysis if API key is missing (service-unavailable tag)
       const analysis = await analyzeMedia(title, mediaType, finalReleaseYear, finalDescription);
+
+      // Accept any analysis result, including fallback responses
+      // Frontend will handle service-unavailable or api-key-missing tags appropriately
 
       // Store the result with TMDB ID for caching
       const insertData: InsertMediaAnalysis = {
@@ -358,10 +363,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(toSearchResponse(saved));
     } catch (error) {
-      console.error("Search error:", error);
-      res.status(500).json({
-        error: "Failed to analyze media",
-        message: error instanceof Error ? error.message : "Unknown error",
+      console.error("[Search] Unhandled error in /api/search:", error);
+      return res.status(200).json({
+        error: "analysis_failed",
+        message: "We ran into a problem analyzing this title. Please try again later.",
+        analysis: null,
       });
     }
   });
