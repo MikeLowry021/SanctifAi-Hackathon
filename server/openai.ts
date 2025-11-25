@@ -71,14 +71,19 @@ In "faithAnalysis":
 
 /**
  * Create an OpenAI client in a safe, lazy way.
+ * Returns null if API key is not available.
  */
-function getOpenAIClient(): OpenAI {
-  const apiKey = config.openaiApiKey;
+function getOpenAIClient(): OpenAI | null {
+  const apiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
 
   console.log("[OpenAI] getOpenAIClient env check:", {
     hasOpenAI: !!apiKey,
     preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
   });
+
+  if (!apiKey) {
+    return null;
+  }
 
   return new OpenAI({ apiKey });
 }
@@ -92,22 +97,19 @@ export async function analyzeMedia(
   releaseYear?: string | null,
   overview?: string | null
 ): Promise<DiscernmentAnalysis> {
-  const apiKey = config.openaiApiKey;
+  const client = getOpenAIClient();
 
-  if (!apiKey) {
-    console.error("[OpenAI] OPENAI_API_KEY is not configured - returning fallback response");
+  if (!client) {
     return {
       discernmentScore: 50,
-      faithAnalysis:
-        "The OpenAI API key is not configured on the server. This analysis feature requires proper API credentials to function. Please contact the administrator to enable AI-powered discernment analysis.",
-      tags: ["api-key-missing"],
-      verseText: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.",
-      verseReference: "Proverbs 3:5-6 (NLT)",
+      faithAnalysis: "AI service is unavailable right now.",
+      tags: ["service-unavailable"],
+      verseText: "",
+      verseReference: "",
       alternatives: [],
     };
   }
 
-  const client = getOpenAIClient();
   const prompt = buildPrompt(title, mediaType, releaseYear, overview);
 
   console.log(
