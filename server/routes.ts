@@ -18,16 +18,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication (Replit Auth integration)
   await setupAuth(app);
 
-  // Auth route - get current user
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
+  // Auth route - get current user (guest mode for hackathon)
+  app.get("/api/auth/user", (_req, res) => {
+    return res.json({
+      user: null,
+      isAuthenticated: false,
+    });
   });
 
   // Lyrics analysis endpoint
