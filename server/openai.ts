@@ -3,22 +3,13 @@ dotenv.config();
 
 import OpenAI from "openai";
 
-// Lazy initialization of OpenAI client
-let openai: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!openai) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    console.log(`[OpenAI Module] Environment check - OPENAI_API_KEY: ${apiKey ? 'SET ✓' : 'NOT SET ✗'}`);
-
-    if (!apiKey) {
-      throw new Error("OPENAI_API_KEY environment variable is not set");
-    }
-
-    openai = new OpenAI({ apiKey });
-    console.log(`[OpenAI Module] Client initialized successfully`);
-  }
-  return openai;
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  console.log("[OpenAI] getOpenAIClient env check:", {
+    hasOpenAI: !!apiKey,
+    preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
+  });
+  return new OpenAI({ apiKey: apiKey ?? "" });
 }
 
 export interface DiscernmentAnalysis {
@@ -113,7 +104,8 @@ Respond ONLY with valid JSON in this exact format:
       timeoutHandle = setTimeout(() => reject(new Error("OpenAI request timeout after 45 seconds")), 45000);
     });
 
-    const apiPromise = getOpenAIClient().chat.completions.create({
+    const openai = getOpenAIClient();
+    const apiPromise = openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {

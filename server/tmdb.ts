@@ -31,11 +31,10 @@ export async function searchTMDB(
   mediaType: "movie" | "show" | "game" = "movie"
 ): Promise<TMDBFormattedResult[]> {
   const apiKey = process.env.TMDB_API_KEY;
-  console.log(`[TMDB Module] Environment check - TMDB_API_KEY: ${apiKey ? 'SET ✓' : 'NOT SET ✗'}`);
-
-  if (!apiKey) {
-    throw new Error("TMDB_API_KEY is not configured");
-  }
+  console.log("[TMDB] searchTMDB env check:", {
+    hasTMDB: !!apiKey,
+    preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
+  });
 
   try {
     // Use multi-search endpoint to automatically detect movies vs TV shows
@@ -45,7 +44,7 @@ export async function searchTMDB(
     const response = await fetch(url, {
       headers: {
         accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey ?? ""}`,
       },
     });
 
@@ -107,11 +106,10 @@ export async function getTMDBDetails(
   mediaType: "movie" | "show" = "movie"
 ): Promise<TMDBFormattedResult | null> {
   const apiKey = process.env.TMDB_API_KEY;
-  console.log(`[TMDB Module] Environment check (getTMDBDetails) - TMDB_API_KEY: ${apiKey ? 'SET ✓' : 'NOT SET ✗'}`);
-
-  if (!apiKey) {
-    throw new Error("TMDB_API_KEY is not configured");
-  }
+  console.log("[TMDB] getTMDBDetails env check:", {
+    hasTMDB: !!apiKey,
+    preview: apiKey ? apiKey.slice(0, 6) + "..." : null,
+  });
 
   try {
     const endpoint =
@@ -122,7 +120,7 @@ export async function getTMDBDetails(
     const response = await fetch(endpoint, {
       headers: {
         accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey ?? ""}`,
       },
     });
 
