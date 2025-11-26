@@ -1,20 +1,13 @@
 /**
- * useAuth hook for accessing authentication state
+ * QuickAuth: Guest-only authentication stub
  *
- * FUTURE WORK - POST HACKATHON: Implement actual authentication
- * Original implementation would use useQuery to fetch from /api/auth/user
+ * This hook provides a pure guest experience with no network requests.
+ * All authentication is disabled for the hackathon build.
  */
-import type { User } from "@shared/schema";
-
 export function useAuth() {
-  // Authentication is currently disabled (guest mode)
-  const user: User | null = null;
-  const isLoading = false;
-  const isAuthenticated = false;
-
   return {
-    user,
-    isLoading,
-    isAuthenticated,
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
   };
 }

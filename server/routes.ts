@@ -28,7 +28,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Auth route - returns current user authentication status
+  // QuickAuth: Guest-only authentication endpoint
+  // Always returns guest status (no authentication required)
   app.get("/api/auth/user", (_req, res) => {
     return res.json({
       user: null,
