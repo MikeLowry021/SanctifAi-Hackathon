@@ -16,7 +16,7 @@ import { ManualProvider } from "./lyrics/manual";
 import { config } from "./config";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication (Replit Auth integration)
+  // Setup authentication (stub - see replitAuth.ts)
   await setupAuth(app);
 
   // Health check endpoint - for monitoring and deployment verification
@@ -28,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Auth route - get current user (guest mode for hackathon)
+  // Auth route - returns current user authentication status
   app.get("/api/auth/user", (_req, res) => {
     return res.json({
       user: null,
@@ -466,66 +466,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Community routes (scaffolded - not yet implemented)
+  // FUTURE WORK - POST HACKATHON: Community features (comments, reviews, discussions)
+  // These routes are scaffolded but not yet implemented
   
   // Comments routes
   app.get("/api/comments/:analysisId", async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.post("/api/comments", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.delete("/api/comments/:commentId", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   // Reviews routes
   app.get("/api/reviews/:analysisId", async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.post("/api/reviews", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.put("/api/reviews/:reviewId", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.delete("/api/reviews/:reviewId", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   // Discussions routes
   app.get("/api/discussions", async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.get("/api/discussions/:discussionId", async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.post("/api/discussions", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.delete("/api/discussions/:discussionId", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   // Discussion replies routes
   app.get("/api/discussions/:discussionId/replies", async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.post("/api/discussions/:discussionId/replies", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   app.delete("/api/replies/:replyId", isAuthenticated, async (req, res) => {
-    res.status(501).json({ error: "Community features coming soon" });
+    res.status(501).json({ error: "Feature not yet implemented" });
   });
 
   const httpServer = createServer(app);

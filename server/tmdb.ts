@@ -45,7 +45,7 @@ function getTMDBApiKey(): string | null {
  */
 export async function searchTMDB(
   query: string,
-  mediaType: "movie" | "show" | "game" = "movie"
+  mediaType: "movie" | "show" = "movie"
 ): Promise<TMDBFormattedResult[]> {
   const apiKey = getTMDBApiKey();
 

@@ -1,11 +1,14 @@
-// client/src/components/save-button.tsx
-
 /**
- * SaveButton is disabled in the Bolt hackathon demo build.
- * Saved analyses and personal libraries require authentication,
- * which is not implemented in this environment.
- * 
- * This component intentionally renders nothing.
+ * SaveButton component stub
+ *
+ * FUTURE WORK - POST HACKATHON: Implement save functionality
+ * Saved analyses and personal libraries require authentication.
+ * Once authentication is implemented, this component should:
+ * - Show save/unsave button
+ * - Handle optimistic updates
+ * - Sync with backend saved_analyses table
+ *
+ * This component intentionally renders nothing until auth is ready.
  */
 
 interface SaveButtonProps {

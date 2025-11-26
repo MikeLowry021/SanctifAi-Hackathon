@@ -42,7 +42,7 @@ export interface IStorage {
     timestamp: Date;
   }): Promise<void>;
   
-  // User operations (required for Replit Auth)
+  // User operations (FUTURE WORK - POST HACKATHON: for authentication system)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
@@ -129,7 +129,7 @@ export class MemStorage implements IStorage {
     return Array.from(this.analyses.values());
   }
 
-  // User operations (required for Replit Auth)
+  // User operations (FUTURE WORK - POST HACKATHON: for authentication system)
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
@@ -202,7 +202,7 @@ export class MemStorage implements IStorage {
     );
   }
 
-  // Community operations (scaffolded - not yet implemented)
+  // FUTURE WORK - POST HACKATHON: Community operations (scaffolded - not yet implemented)
   async getCommentsByAnalysis(analysisId: string): Promise<Comment[]> {
     throw new Error("Community features not yet implemented");
   }
@@ -296,7 +296,7 @@ export class DbStorage implements IStorage {
     return await db.select().from(mediaAnalyses).orderBy(desc(mediaAnalyses.createdAt));
   }
 
-  // User operations (required for Replit Auth)
+  // User operations (FUTURE WORK - POST HACKATHON: for authentication system)
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id));
     return result[0];
@@ -370,7 +370,7 @@ export class DbStorage implements IStorage {
     return result.length > 0;
   }
 
-  // Community operations (scaffolded - not yet implemented)
+  // FUTURE WORK - POST HACKATHON: Community operations (scaffolded - not yet implemented)
   async getCommentsByAnalysis(analysisId: string): Promise<Comment[]> {
     throw new Error("Community features not yet implemented");
   }
