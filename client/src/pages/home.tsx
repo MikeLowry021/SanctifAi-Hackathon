@@ -244,7 +244,7 @@ export default function Home() {
               
               <p className="text-base md:text-lg text-white/70 max-w-2xl mx-auto leading-relaxed">
                 Get instant faith-based analysis, discernment scores, and
-                scripture-guided wisdom for movies, shows, games, and apps.
+                scripture-guided wisdom for movies, shows, books, and songs.
               </p>
             </div>
 
