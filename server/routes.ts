@@ -166,14 +166,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { searchiTunes } = await import("./utils/fetchMusicInfo");
       const results = await searchiTunes(term);
-      
+
       // iTunes API returns its own format, just pass through
       const iTunesResponse = await fetch(
         `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&limit=${limit || 10}`
       );
       const data = await iTunesResponse.json();
-      
+
       return res.json(data);
+    } catch (error: any) {
+      console.error("iTunes search error:", error);
+      return res.status(500).json({ message: "iTunes search failed", error: error.message });
+    }
+  });
+
+  // iTunes search endpoint for frontend (with artist support)
+  app.get("/api/itunes/search", async (req, res) => {
+    try {
+      const { query } = req.query;
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ message: "Search query required" });
+      }
+
+      const { searchiTunes } = await import("./utils/fetchMusicInfo");
+      const results = await searchiTunes(query);
+
+      return res.json({ results });
     } catch (error: any) {
       console.error("iTunes search error:", error);
       return res.status(500).json({ message: "iTunes search failed", error: error.message });

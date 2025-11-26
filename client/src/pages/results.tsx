@@ -52,10 +52,12 @@ export default function Results() {
 
   // Fetch iTunes search results for songs (only if not pre-selected)
   const { data: itunesData, isLoading: isLoadingItunes } = useQuery<{ results: SongResult[] }>({
-    queryKey: ["/api/itunes/search", title],
+    queryKey: ["/api/itunes/search", title, artist],
     enabled: mediaType === "song" && !artist,
     queryFn: async () => {
-      const params = new URLSearchParams({ query: title });
+      // Build query with both title and artist if available
+      const searchQuery = artist ? `${title} ${artist}` : title;
+      const params = new URLSearchParams({ query: searchQuery });
       const response = await fetch(`/api/itunes/search?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Failed to search iTunes");

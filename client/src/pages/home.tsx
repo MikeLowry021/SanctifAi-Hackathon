@@ -66,21 +66,11 @@ export default function Home() {
     }
   }, [searchQuery, isFetchingTMDB, tmdbError, tmdbData, setLocation]);
 
-  const handleSearch = (title: string, mediaType?: string) => {
+  const handleSearch = (title: string, mediaType?: string, artist?: string) => {
     const finalMediaType = mediaType || "movie";
-    
+
     // Books don't use TMDB - go directly to analysis
     if (finalMediaType === "book") {
-      const params = new URLSearchParams({ 
-        title,
-        mediaType: finalMediaType,
-      });
-      setLocation(`/results?${params.toString()}`);
-      return;
-    }
-    
-    // Songs go directly to results page where iTunes search happens
-    if (finalMediaType === "song") {
       const params = new URLSearchParams({
         title,
         mediaType: finalMediaType,
@@ -88,7 +78,21 @@ export default function Home() {
       setLocation(`/results?${params.toString()}`);
       return;
     }
-    
+
+    // Songs go directly to results page where iTunes search happens
+    if (finalMediaType === "song") {
+      const params = new URLSearchParams({
+        title,
+        mediaType: finalMediaType,
+      });
+      // Add artist parameter if provided
+      if (artist) {
+        params.append("artist", artist);
+      }
+      setLocation(`/results?${params.toString()}`);
+      return;
+    }
+
     // For other media types (movie, show, game), use TMDB search
     setIsSearching(true);
     setSearchQuery({ title, mediaType: finalMediaType });
