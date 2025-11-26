@@ -9,6 +9,9 @@ export interface TMDBSearchResult {
   first_air_date?: string;
   overview: string;
   vote_average: number;
+  vote_count?: number;
+  popularity?: number;
+  adult?: boolean;
   media_type: "movie" | "tv";
 }
 
@@ -19,6 +22,8 @@ export interface TMDBFormattedResult {
   releaseYear: string | null;
   overview: string;
   rating: number;
+  voteCount: number;
+  popularity: number;
   mediaType: "movie" | "show";
 }
 
@@ -50,7 +55,8 @@ export async function searchTMDB(
 
   try {
     const endpoint = `${TMDB_BASE_URL}/search/multi`;
-    const url = `${endpoint}?query=${encodeURIComponent(query)}`;
+    // Add include_adult=false to filter out adult content
+    const url = `${endpoint}?query=${encodeURIComponent(query)}&include_adult=false`;
 
     const response = await fetch(url, {
       headers: {
@@ -68,11 +74,13 @@ export async function searchTMDB(
     const data = (await response.json()) as { results: TMDBSearchResult[] };
 
     const formatted: TMDBFormattedResult[] = (data.results ?? [])
-      // Only keep movies and TV
+      // Filter: Only keep movies and TV shows
       .filter(
         (result) => result.media_type === "movie" || result.media_type === "tv"
       )
-      .slice(0, 10)
+      // Filter: Explicitly exclude adult content (belt-and-suspenders with API param)
+      .filter((result) => !result.adult)
+      // Map to our format
       .map((result) => {
         const title = result.title || result.name || "Unknown Title";
         const releaseYear =
@@ -92,9 +100,23 @@ export async function searchTMDB(
           releaseYear,
           overview: result.overview || "",
           rating: result.vote_average || 0,
+          voteCount: result.vote_count || 0,
+          popularity: result.popularity || 0,
           mediaType: ourMediaType,
         };
-      });
+      })
+      // Sort: Prioritize by popularity and vote count for relevance
+      .sort((a, b) => {
+        // Primary sort: popularity (descending)
+        const popularityDiff = b.popularity - a.popularity;
+        if (Math.abs(popularityDiff) > 10) {
+          return popularityDiff;
+        }
+        // Secondary sort: vote count (descending) for ties
+        return b.voteCount - a.voteCount;
+      })
+      // Limit: Return only top 3-4 most relevant results
+      .slice(0, 4);
 
     return formatted;
   } catch (error) {
@@ -154,6 +176,8 @@ export async function getTMDBDetails(
       releaseYear,
       overview: result.overview || "",
       rating: result.vote_average || 0,
+      voteCount: result.vote_count || 0,
+      popularity: result.popularity || 0,
       mediaType,
     };
   } catch (error) {

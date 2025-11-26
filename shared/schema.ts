@@ -64,6 +64,8 @@ export type TMDBResult = {
   releaseYear: string | null;
   overview: string;
   rating: number;
+  voteCount?: number;
+  popularity?: number;
   mediaType: "movie" | "show" | "book" | "song";
 };
 
