@@ -1,10 +1,12 @@
+import { config } from "./config";
+
 export async function logToMake(payload: any) {
-  if (!process.env.MAKE_WEBHOOK_URL) {
-    return; // Skip if webhook not configured
+  if (!config.makeWebhookUrl) {
+    return;
   }
 
   try {
-    await fetch(process.env.MAKE_WEBHOOK_URL, {
+    await fetch(config.makeWebhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)

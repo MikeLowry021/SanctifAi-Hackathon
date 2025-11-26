@@ -13,6 +13,7 @@ import { neon } from "@neondatabase/serverless";
 import { LyricsCache } from "./lyrics/index";
 import { MusixmatchProvider } from "./lyrics/musixmatch";
 import { ManualProvider } from "./lyrics/manual";
+import { config } from "./config";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication (Replit Auth integration)
@@ -47,8 +48,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize cache only if DATABASE_URL is set
       let cache: LyricsCache | null = null;
-      if (process.env.DATABASE_URL) {
-        const sql = neon(process.env.DATABASE_URL);
+      if (config.databaseUrl) {
+        const sql = neon(config.databaseUrl);
         cache = new LyricsCache(sql, 90);
       }
 
@@ -73,8 +74,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         // Try Musixmatch if API key is configured
-        else if (process.env.LYRICS_API_KEY && process.env.LYRICS_PROVIDER === 'musixmatch') {
-          const musixmatch = new MusixmatchProvider(process.env.LYRICS_API_KEY);
+        else if (config.lyricsApiKey && config.lyricsProvider === 'musixmatch') {
+          const musixmatch = new MusixmatchProvider(config.lyricsApiKey);
           const result = await musixmatch.search(artist, title);
 
           if (result) {

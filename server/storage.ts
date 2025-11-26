@@ -26,6 +26,7 @@ import {
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
+import { config } from "./config";
 
 export interface IStorage {
   // Media analysis operations
@@ -433,7 +434,7 @@ export class DbStorage implements IStorage {
 
 // Use PostgreSQL database for persistent storage, or in-memory if DATABASE_URL not set
 async function createStorage(): Promise<IStorage> {
-  if (!process.env.DATABASE_URL) {
+  if (!config.databaseUrl) {
     console.log("⚠️  DATABASE_URL not set - using in-memory storage");
     return new MemStorage();
   }
