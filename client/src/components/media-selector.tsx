@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Film, Tv, Gamepad2, Music } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Film, Tv, Gamepad2, Music, Info } from "lucide-react";
 import type { TMDBResult } from "@shared/schema";
 
 interface MediaSelectorProps {
@@ -11,6 +12,7 @@ interface MediaSelectorProps {
 
 export function MediaSelector({ results, onSelect, mediaType }: MediaSelectorProps) {
   const isSong = mediaType === "song";
+  const isMovieOrShow = mediaType === "movie" || mediaType === "show";
   
   const getIcon = (type: string) => {
     switch (type) {
@@ -35,6 +37,19 @@ export function MediaSelector({ results, onSelect, mediaType }: MediaSelectorPro
           Multiple options found. Choose the exact title you want to analyze.
         </p>
       </div>
+
+      {/* Step 1 Instruction - Only for Movies/Shows */}
+      {isMovieOrShow && (
+        <Alert className="mb-6 border-2 border-primary/20 bg-primary/5">
+          <Info className="h-5 w-5 text-primary" />
+          <AlertDescription className="ml-2 text-base font-medium">
+            <span className="inline-flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 text-primary text-sm font-bold">1</span>
+              <span>Select the exact movie or show you meant.</span>
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {results.map((result, index) => {

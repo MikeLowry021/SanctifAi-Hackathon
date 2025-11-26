@@ -32,15 +32,34 @@ export default function Home() {
     },
   });
 
-  // Fallback effect: if TMDB fails or returns no results, proceed directly to analysis
+  // Auto-selection and fallback effect
   useEffect(() => {
     if (!searchQuery || isFetchingTMDB) return;
-    
+
+    // If TMDB fails or returns no results, proceed directly to analysis
     if (tmdbError || (tmdbData && tmdbData.results.length === 0)) {
-      const params = new URLSearchParams({ 
+      const params = new URLSearchParams({
         title: searchQuery.title,
         mediaType: searchQuery.mediaType,
       });
+      setLocation(`/results?${params.toString()}`);
+      setIsSearching(false);
+      setSearchQuery(null);
+      return;
+    }
+
+    // AUTO-SELECTION: If exactly one result, automatically select it
+    if (tmdbData && tmdbData.results.length === 1) {
+      const result = tmdbData.results[0];
+      const params = new URLSearchParams({
+        title: result.title,
+        mediaType: result.mediaType,
+        tmdbId: result.tmdbId.toString(),
+      });
+      if (result.posterUrl) params.append("posterUrl", result.posterUrl);
+      if (result.releaseYear) params.append("releaseYear", result.releaseYear);
+      if (result.overview) params.append("overview", result.overview);
+
       setLocation(`/results?${params.toString()}`);
       setIsSearching(false);
       setSearchQuery(null);
@@ -111,6 +130,25 @@ export default function Home() {
           <div className="flex flex-col items-center justify-center min-h-[400px]">
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
             <p className="text-muted-foreground">Searching for titles...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Single result auto-selection (handled by useEffect, but show briefly if still here)
+    if (tmdbData?.results && tmdbData.results.length === 1) {
+      const result = tmdbData.results[0];
+      return (
+        <div className="min-h-[calc(100vh-4rem)] py-8">
+          <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+            <div className="text-center space-y-2">
+              <p className="text-lg font-semibold">Found exact match!</p>
+              <p className="text-muted-foreground">
+                Analyzing: <span className="font-medium text-foreground">{result.title}</span>
+                {result.releaseYear && <span className="text-muted-foreground"> ({result.releaseYear})</span>}
+              </p>
+            </div>
           </div>
         </div>
       );
