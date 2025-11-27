@@ -14,12 +14,13 @@ import { ArrowLeft, Star, Film, AlertTriangle, Loader2, Music, Check } from "luc
 import type { SearchResponse } from "@shared/schema";
 
 interface SongResult {
-  id: number;
+  id: string;
   title: string;
   artist: string;
   artwork?: string;
   album?: string;
   releaseYear?: string;
+  genre?: string;
 }
 
 export default function Results() {
@@ -50,17 +51,18 @@ export default function Results() {
     } : null
   );
 
-  // Fetch iTunes search results for songs (only if not pre-selected)
-  const { data: itunesData, isLoading: isLoadingItunes } = useQuery<{ results: SongResult[] }>({
-    queryKey: ["/api/itunes/search", title, artist],
+  // Fetch song search results using backend /api/search endpoint
+  const { data: songSearchData, isLoading: isLoadingSongSearch } = useQuery<{ results: SongResult[] }>({
+    queryKey: ["/api/tmdb/search", title, mediaType],
     enabled: mediaType === "song" && !artist,
     queryFn: async () => {
-      // Build query with both title and artist if available
-      const searchQuery = artist ? `${title} ${artist}` : title;
-      const params = new URLSearchParams({ query: searchQuery });
-      const response = await fetch(`/api/itunes/search?${params.toString()}`);
+      const params = new URLSearchParams({
+        query: title,
+        mediaType: "song"
+      });
+      const response = await fetch(`/api/tmdb/search?${params.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to search iTunes");
+        throw new Error("Failed to search songs");
       }
       return response.json();
     },
@@ -145,14 +147,14 @@ export default function Results() {
               </h2>
             </div>
 
-            {isLoadingItunes ? (
+            {isLoadingSongSearch ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-4">
                 <Loader2 className="w-12 h-12 text-primary animate-spin" />
                 <p className="text-muted-foreground">Searching iTunes...</p>
               </div>
-            ) : itunesData?.results && itunesData.results.length > 0 ? (
+            ) : songSearchData?.results && songSearchData.results.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {itunesData.results.map((song) => (
+                {songSearchData.results.map((song) => (
                   <Card
                     key={song.id}
                     className={`cursor-pointer transition-all ${
@@ -211,7 +213,7 @@ export default function Results() {
                   <div>
                     <h3 className="text-lg font-semibold mb-2">No songs found for this title</h3>
                     <p className="text-muted-foreground">
-                      Try refining your search or paste lyrics directly below.
+                      You can still paste lyrics below to get a biblical discernment.
                     </p>
                   </div>
                 </CardContent>
@@ -245,7 +247,7 @@ export default function Results() {
           )}
 
           {/* Fallback: Show analysis input if no results */}
-          {!isLoadingItunes && (!itunesData?.results || itunesData.results.length === 0) && !selectedSong && (
+          {!isLoadingSongSearch && (!songSearchData?.results || songSearchData.results.length === 0) && !selectedSong && (
             <motion.div
               id="song-analysis"
               initial={{ opacity: 0, y: 20 }}
